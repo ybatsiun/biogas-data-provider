@@ -70,5 +70,12 @@ source venv/bin/activate
 pytest test_csv_merge.py -v
 ```
 
-**Requirements:** `energy.csv` must exist (run `fetch.py` first). Tests make real HTTP requests to
-`energy-api.instrat.pl` and `archive-api.open-meteo.com`, so an internet connection is required.
+**Requirements:** Tests make real HTTP requests to `energy-api.instrat.pl` and
+`archive-api.open-meteo.com`, so an internet connection is required.
+
+> **Note:** the bundled `energy.csv` was generated with an incorrect Warsaw→UTC timezone
+> conversion that has since been fixed. Regenerate it before using it for analysis:
+> ```bash
+> source venv/bin/activate
+> python fetch.py --date-from 2025-01-01 --date-to 2026-03-01 --output energy.csv
+> ```

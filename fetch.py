@@ -13,7 +13,7 @@ Usage:
 import argparse
 import csv
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import requests
 
@@ -63,30 +63,6 @@ def floor_hour(dt: datetime) -> datetime:
     return dt.replace(minute=0, second=0, microsecond=0)
 
 
-def warsaw_to_utc(dt_naive: datetime) -> datetime:
-    """
-    Convert a naive datetime assumed to be Warsaw local time (CET/CEST) to UTC.
-
-    CET  = UTC+1 (standard, Oct–Mar)
-    CEST = UTC+2 (summer, Mar–Oct)
-
-    DST in Poland (last Sun of Mar / last Sun of Oct) is approximated here.
-    For production use, replace with zoneinfo or pytz if sub-hour accuracy
-    during the two transition hours per year matters.
-    """
-    year = dt_naive.year
-    # Last Sunday of March
-    dst_start = datetime(year, 3, 31) - timedelta(days=datetime(year, 3, 31).weekday() + 1)
-    dst_start = dst_start.replace(hour=2)
-    # Last Sunday of October
-    dst_end = datetime(year, 10, 31) - timedelta(days=datetime(year, 10, 31).weekday() + 1)
-    dst_end = dst_end.replace(hour=3)
-
-    if dst_start <= dt_naive < dst_end:
-        return dt_naive.replace(tzinfo=timezone(timedelta(hours=2))).astimezone(timezone.utc)
-    else:
-        return dt_naive.replace(tzinfo=timezone(timedelta(hours=1))).astimezone(timezone.utc)
-
 
 def fmt_utc(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -110,9 +86,7 @@ def fetch_generation(date_from: datetime, date_to: datetime) -> dict:
 
     result = {}
     for row in data:
-        # 'date' has Z suffix but is actually Warsaw local time
-        dt_naive = datetime.fromisoformat(row["date"].replace("Z", ""))
-        ts_utc = floor_hour(warsaw_to_utc(dt_naive))
+        ts_utc = floor_hour(parse_iso(row["date"]))
         key = fmt_utc(ts_utc)
         result[key] = {
             "gen_biomass": row.get("biomass", ""),

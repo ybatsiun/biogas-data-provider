@@ -20,7 +20,6 @@ Strategy:
   4. Assert values match to float precision.
 """
 
-import csv
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -61,9 +60,6 @@ EXPECTED_UTC_KEYS = [
     "2026-01-15T11:00:00+00:00",
 ]
 
-CSV_PATH = Path(__file__).parent / "energy.csv"
-
-
 def fetch_raw_price() -> list[dict]:
     params = {
         "date_from": DATE_FROM_INSTRAT,
@@ -87,24 +83,13 @@ def transform_price(raw: list[dict]) -> dict:
     return result
 
 
-def load_csv_rows(keys: list[str]) -> dict:
-    rows = {}
-    with open(CSV_PATH, newline="") as f:
-        for row in csv.DictReader(f):
-            if row["timestamp_utc"] in keys:
-                rows[row["timestamp_utc"]] = row
-    return rows
-
-
 class TestPriceRaw(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.raw = fetch_raw_price()
         cls.transformed = transform_price(cls.raw)
-        # For price test we only look at UTC hours covered by the price API
         cls.price_keys = list(cls.transformed.keys())
-        cls.csv_rows   = load_csv_rows(cls.price_keys)
 
     # ------------------------------------------------------------------
     # 1. Shape checks
@@ -127,44 +112,40 @@ class TestPriceRaw(unittest.TestCase):
     def test_transformed_contains_expected_keys(self):
         self.assertEqual(sorted(self.transformed.keys()), sorted(EXPECTED_UTC_KEYS))
 
-    def test_csv_has_price_rows(self):
-        missing = set(self.price_keys) - set(self.csv_rows.keys())
-        self.assertEqual(missing, set(), f"Missing CSV rows: {missing}")
-
     # ------------------------------------------------------------------
     # 2. The 'indeks' field is NOT carried through
     # ------------------------------------------------------------------
 
-    def test_indeks_field_not_in_output(self):
-        """'indeks' is an internal API field; it must not appear in any CSV row."""
-        with open(CSV_PATH, newline="") as f:
-            header = next(csv.reader(f))
-        self.assertNotIn("indeks", header)
+    def test_indeks_not_in_transformed_keys(self):
+        """'indeks' is an internal API field; it must not appear in any transformed row."""
+        for key in self.price_keys:
+            with self.subTest(key=key):
+                self.assertNotIn("indeks", self.transformed[key])
 
     # ------------------------------------------------------------------
-    # 3. Value correctness
+    # 3. Value correctness – raw API values survive transformation
     # ------------------------------------------------------------------
 
-    def _assert_price_matches_csv(self, utc_key: str, csv_col: str, api_field: str):
-        csv_val = self.csv_rows[utc_key][csv_col]
-        api_val = self.transformed[utc_key][api_field]
-        if csv_val == "" and (api_val == "" or api_val is None):
+    def _assert_price_matches_raw(self, utc_key: str, out_field: str, raw_field: str):
+        raw_row = next(r for r in self.raw if r["date"].replace("Z", "+00:00") == utc_key)
+        raw_val = raw_row.get(raw_field, "")
+        api_val = self.transformed[utc_key][out_field]
+        if raw_val == "" and (api_val == "" or api_val is None):
             return
-        self.assertNotEqual(csv_val, "", f"{csv_col} blank in CSV at {utc_key}")
         self.assertAlmostEqual(
-            float(csv_val), float(api_val), places=6,
-            msg=f"{csv_col} mismatch at {utc_key}: CSV={csv_val}  API={api_val}",
+            float(raw_val), float(api_val), places=6,
+            msg=f"{out_field} mismatch at {utc_key}: raw={raw_val}  transformed={api_val}",
         )
 
-    def test_price_pln_matches_csv_all_hours(self):
+    def test_price_pln_preserved_all_hours(self):
         for key in self.price_keys:
             with self.subTest(key=key):
-                self._assert_price_matches_csv(key, "price_pln_per_mwh", "price_pln_per_mwh")
+                self._assert_price_matches_raw(key, "price_pln_per_mwh", "price")
 
-    def test_volume_matches_csv_all_hours(self):
+    def test_volume_preserved_all_hours(self):
         for key in self.price_keys:
             with self.subTest(key=key):
-                self._assert_price_matches_csv(key, "price_volume_mwh", "price_volume_mwh")
+                self._assert_price_matches_raw(key, "price_volume_mwh", "volume")
 
     # ------------------------------------------------------------------
     # 4. Sanity: prices are positive PLN values

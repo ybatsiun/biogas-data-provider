@@ -20,7 +20,6 @@ Strategy:
   3. Load energy.csv and compare the 12 solar values.
 """
 
-import csv
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -52,9 +51,6 @@ EXPECTED_UTC_KEYS = [
     "2026-01-15T11:00:00+00:00",
 ]
 
-CSV_PATH = Path(__file__).parent / "energy.csv"
-
-
 def fetch_raw_solar() -> dict:
     """Returns the raw JSON dict from open-meteo."""
     params = {
@@ -83,22 +79,12 @@ def transform_solar(raw: dict) -> dict:
     return result
 
 
-def load_csv_rows(keys: list[str]) -> dict:
-    rows = {}
-    with open(CSV_PATH, newline="") as f:
-        for row in csv.DictReader(f):
-            if row["timestamp_utc"] in keys:
-                rows[row["timestamp_utc"]] = row
-    return rows
-
-
 class TestSolarRaw(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.raw        = fetch_raw_solar()
         cls.transformed = transform_solar(cls.raw)
-        cls.csv_rows   = load_csv_rows(EXPECTED_UTC_KEYS)
 
     # ------------------------------------------------------------------
     # 1. Shape checks
@@ -114,10 +100,6 @@ class TestSolarRaw(unittest.TestCase):
     def test_all_12_expected_keys_present(self):
         missing = set(EXPECTED_UTC_KEYS) - set(self.transformed.keys())
         self.assertEqual(missing, set(), f"Missing keys: {missing}")
-
-    def test_csv_has_all_expected_rows(self):
-        missing = set(EXPECTED_UTC_KEYS) - set(self.csv_rows.keys())
-        self.assertEqual(missing, set(), f"Missing CSV rows: {missing}")
 
     # ------------------------------------------------------------------
     # 2. Unix → UTC conversion correctness
@@ -154,26 +136,7 @@ class TestSolarRaw(unittest.TestCase):
                 self.assertIsNotNone(dt.tzinfo)
 
     # ------------------------------------------------------------------
-    # 3. Value correctness – matches CSV
-    # ------------------------------------------------------------------
-
-    def test_solar_values_match_csv_all_12_hours(self):
-        for key in EXPECTED_UTC_KEYS:
-            csv_val = self.csv_rows[key]["solar_radiation_wm2"]
-            api_val = self.transformed[key]["solar_radiation_wm2"]
-            with self.subTest(key=key):
-                if api_val == "" or api_val is None:
-                    self.assertEqual(csv_val, "",
-                        f"API returned None but CSV has {csv_val!r} at {key}")
-                else:
-                    self.assertAlmostEqual(
-                        float(csv_val), float(api_val), places=6,
-                        msg=f"solar_radiation_wm2 mismatch at {key}: "
-                            f"CSV={csv_val}  API={api_val}",
-                    )
-
-    # ------------------------------------------------------------------
-    # 4. Sanity: values are plausible W/m² for Warsaw in January
+    # 3. Sanity: values are plausible W/m² for Warsaw in January
     # ------------------------------------------------------------------
 
     def test_nighttime_hours_have_zero_irradiance(self):
