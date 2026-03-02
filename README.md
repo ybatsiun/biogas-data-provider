@@ -1,4 +1,4 @@
-# poland-energy-data
+# biogas-data-provider
 
 Fetches and merges hourly Polish energy data from three sources into a single CSV.
 
