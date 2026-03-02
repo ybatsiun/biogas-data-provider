@@ -13,7 +13,7 @@ Fetches and merges hourly Polish energy data from three sources into a single CS
 ## Setup
 
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install pytest
@@ -22,7 +22,7 @@ pip install pytest
 ## Usage
 
 ```bash
-python fetch.py --date-from 2025-02-01 --date-to 2026-02-01 --output energy.csv
+python3 fetch.py --date-from 2025-02-01 --date-to 2026-02-01 --output energy.csv
 ```
 
 ## Output schema
@@ -53,7 +53,7 @@ No mocking — actual wire data is used.
 
 ```bash
 source venv/bin/activate
-python -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_csv_merge.py -v
+python3 -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_csv_merge.py -v
 ```
 
 | File | What it checks |
@@ -67,15 +67,8 @@ All four files are independent — run any single one in isolation if needed:
 
 ```bash
 source venv/bin/activate
-python -m pytest test_csv_merge.py -v
+python3 -m pytest test_csv_merge.py -v
 ```
 
 **Requirements:** Tests make real HTTP requests to `energy-api.instrat.pl` and
 `archive-api.open-meteo.com`, so an internet connection is required.
-
-> **Note:** the bundled `energy.csv` was generated with an incorrect Warsaw→UTC timezone
-> conversion that has since been fixed. Regenerate it before using it for analysis:
-> ```bash
-> source venv/bin/activate
-> python fetch.py --date-from 2025-01-01 --date-to 2026-03-01 --output energy.csv
-> ```
