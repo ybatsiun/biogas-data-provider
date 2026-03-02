@@ -48,26 +48,26 @@ Price data availability starts from late 2025 — earlier rows will have nulls i
 
 ## Tests
 
-The test suite fetches a small fixed window (12 hours, 2026-01-15) from the live APIs and
-compares every field against `energy.csv`. No mocking — actual wire data is used.
+The test suite fetches a small fixed window (12 hours, 2026-01-15) from the live APIs.
+No mocking — actual wire data is used.
 
 ```bash
 source venv/bin/activate
-pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_csv_merge.py -v
+python -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_csv_merge.py -v
 ```
 
 | File | What it checks |
 |---|---|
-| `test_generation_raw.py` | Warsaw→UTC timezone shift for generation timestamps; all 9 MW fields match CSV |
-| `test_price_raw.py` | Price API dates are genuine UTC (no shift); `price`/`volume` pass through exactly |
-| `test_solar_raw.py` | UNIX→UTC key conversion; nighttime = 0 W/m²; daytime > 0; values match CSV |
-| `test_csv_merge.py` | End-to-end: all three sources merged in-memory, every column of every row diffed against CSV |
+| `test_generation_raw.py` | Generation timestamps are genuine UTC (no shift); all 9 MW fields preserved |
+| `test_price_raw.py` | Price API dates are genuine UTC; `price`/`volume` pass through exactly |
+| `test_solar_raw.py` | UNIX→UTC key conversion; nighttime = 0 W/m²; daytime > 0 |
+| `test_csv_merge.py` | End-to-end: all three sources merged in-memory, structure and spot values verified |
 
 All four files are independent — run any single one in isolation if needed:
 
 ```bash
 source venv/bin/activate
-pytest test_csv_merge.py -v
+python -m pytest test_csv_merge.py -v
 ```
 
 **Requirements:** Tests make real HTTP requests to `energy-api.instrat.pl` and
