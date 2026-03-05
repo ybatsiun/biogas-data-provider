@@ -1,6 +1,6 @@
 # biogas-data-provider
 
-Fetches and merges hourly Polish energy data from three sources into a single CSV.
+Fetches and merges hourly Polish energy data from four sources into a single CSV.
 
 ## Sources
 
@@ -9,6 +9,7 @@ Fetches and merges hourly Polish energy data from three sources into a single CS
 | Grid generation by source | ENTSO-E via instrat.pl | MW (avg per hour) |
 | Day-ahead electricity price | RDN via instrat.pl | PLN/MWh |
 | Solar irradiance (lat=52, lon=20) | open-meteo archive | W/m² |
+| Electricity load (actual + forecast) | instrat.pl | MW (avg per hour) |
 
 ## Setup
 
@@ -42,8 +43,10 @@ python3 fetch.py --date-from 2025-02-01 --date-to 2026-02-01 --output energy.csv
 | `price_pln_per_mwh` | PLN/MWh | Day-ahead market price |
 | `price_volume_mwh` | MWh | Traded volume |
 | `solar_radiation_wm2` | W/m² | Shortwave irradiance at Warsaw |
+| `load_mw` | MW | Actual electricity consumption |
+| `load_forecast_mw` | MW | Forecasted electricity consumption |
 
-Generation values are server-side hourly averages of the underlying 15-min ENTSO-E data.
+Generation and load values are server-side hourly averages of the underlying 15-min data.
 Price data availability starts from late 2025 — earlier rows will have nulls in price columns.
 
 ## Tests
@@ -53,7 +56,7 @@ No mocking — actual wire data is used.
 
 ```bash
 source venv/bin/activate
-python3 -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_csv_merge.py -v
+python3 -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py test_load_raw.py test_csv_merge.py -v
 ```
 
 | File | What it checks |
@@ -61,9 +64,10 @@ python3 -m pytest test_generation_raw.py test_price_raw.py test_solar_raw.py tes
 | `test_generation_raw.py` | Generation timestamps are genuine UTC (no shift); all 9 MW fields preserved |
 | `test_price_raw.py` | Price API dates are genuine UTC; `price`/`volume` pass through exactly |
 | `test_solar_raw.py` | UNIX→UTC key conversion; nighttime = 0 W/m²; daytime > 0 |
-| `test_csv_merge.py` | End-to-end: all three sources merged in-memory, structure and spot values verified |
+| `test_load_raw.py` | Load API UTC parsing; `electricity_load`/`forecasted_load` pass through exactly |
+| `test_csv_merge.py` | End-to-end: all four sources merged in-memory, structure and spot values verified |
 
-All four files are independent — run any single one in isolation if needed:
+All five files are independent — run any single one in isolation if needed:
 
 ```bash
 source venv/bin/activate

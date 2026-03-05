@@ -1,10 +1,11 @@
 """
-Fetches Polish energy data from three sources and merges into a single hourly CSV.
+Fetches Polish energy data from four sources and merges into a single hourly CSV.
 
 Sources:
   1. Generation (instrat ENTSO-E): MW per source, hourly avg
   2. Day-ahead price (instrat RDN): PLN/MWh + traded volume MWh, hourly
   3. Solar irradiance (open-meteo archive): W/m² at lat=52 lon=20, hourly
+  4. Electricity load (instrat): actual + forecasted consumption MW, hourly avg
 
 Usage:
   python fetch.py --date-from 2025-02-01 --date-to 2026-02-01 --output energy.csv
@@ -20,6 +21,7 @@ import requests
 GENERATION_URL = "https://energy-api.instrat.pl/api/energy/production_entsoe"
 PRICE_URL = "https://energy-api.instrat.pl/api/prices/energy_price_rdn_hourly"
 SOLAR_URL = "https://archive-api.open-meteo.com/v1/archive"
+LOAD_URL = "https://energy-api.instrat.pl/api/energy/load"
 
 INSTRAT_HEADERS = {
     "accept": "*/*",
@@ -42,6 +44,8 @@ OUTPUT_COLUMNS = [
     "price_pln_per_mwh",
     "price_volume_mwh",
     "solar_radiation_wm2",
+    "load_mw",
+    "load_forecast_mw",
 ]
 
 
@@ -131,6 +135,35 @@ def fetch_price(date_from: datetime, date_to: datetime) -> dict:
     return result
 
 
+def fetch_load(date_from: datetime, date_to: datetime) -> dict:
+    """Returns dict of timestamp_utc_str -> load field dict."""
+    print("Fetching electricity load data...", flush=True)
+    params = {
+        "date_from": instrat_fmt(date_from),
+        "date_to": instrat_fmt(date_to),
+        "aggregation_type": "avg",
+        "aggregation_timeframe": "hour",
+    }
+    resp = requests.get(LOAD_URL, params=params, headers=INSTRAT_HEADERS, timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data:
+        print("  WARNING: load API returned no records", file=sys.stderr)
+        return {}
+
+    result = {}
+    for row in data:
+        ts_utc = floor_hour(parse_iso(row["date"]))
+        key = fmt_utc(ts_utc)
+        result[key] = {
+            "load_mw": row.get("electricity_load", ""),
+            "load_forecast_mw": row.get("forecasted_load", ""),
+        }
+
+    print(f"  Got {len(result)} hourly load records", flush=True)
+    return result
+
+
 def fetch_solar(date_from: datetime, date_to: datetime) -> dict:
     """Returns dict of timestamp_utc_str -> solar field dict."""
     print("Fetching solar irradiance data...", flush=True)
@@ -173,12 +206,14 @@ def main():
     gen = fetch_generation(date_from, date_to)
     price = fetch_price(date_from, date_to)
     solar = fetch_solar(date_from, date_to)
+    load = fetch_load(date_from, date_to)
 
     # Generation is the spine; all timestamps come from it
     all_timestamps = sorted(gen.keys())
 
     null_price = 0
     null_solar = 0
+    null_load = 0
 
     with open(args.output, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS)
@@ -197,6 +232,12 @@ def main():
             else:
                 row["solar_radiation_wm2"] = ""
                 null_solar += 1
+            if ts in load:
+                row.update(load[ts])
+            else:
+                row["load_mw"] = ""
+                row["load_forecast_mw"] = ""
+                null_load += 1
             writer.writerow(row)
 
     print(f"\nWrote {len(all_timestamps)} rows to {args.output}")
@@ -204,6 +245,8 @@ def main():
         print(f"  price_pln_per_mwh / price_volume_mwh: {null_price} nulls (price API coverage gap)")
     if null_solar:
         print(f"  solar_radiation_wm2: {null_solar} nulls")
+    if null_load:
+        print(f"  load_mw / load_forecast_mw: {null_load} nulls")
 
 
 if __name__ == "__main__":
